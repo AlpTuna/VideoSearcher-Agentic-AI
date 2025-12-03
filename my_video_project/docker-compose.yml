@@ -1,0 +1,41 @@
+version: '3.8'
+
+volumes:
+  shared_data:  # The bridge for files
+
+services:
+  # The Brain
+  django:
+    build: ./backend
+    container_name: django_orchestrator
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app                # Live code reloading
+      - ./media_data:/data         # Access to shared files
+      - /var/run/docker.sock:/var/run/docker.sock # Access to Docker Daemon
+    environment:
+      - WORKER_NAME=worker_ffmpeg1 # May need to be deleted
+    depends_on:
+      - ffmpeg-1-tool
+      - worker_deepspeech
+      - worker_ffmpeg2
+
+  # The Muscle
+  ffmpeg-1-tool:
+    build: ./tools/ffmpeg-1
+    container_name: worker_ffmpeg1
+    volumes:
+      - ./media_data:/data             # Access to shared files
+
+  worker_deepspeech:
+    build: ./tools/deepspeech
+    container_name: worker_deepspeech
+    volumes:
+      - ./media_data:/data
+
+  worker_ffmpeg2:
+    build: ./tools/ffmpeg-2
+    container_name: worker_ffmpeg2
+    volumes:
+      - ./media_data:/data

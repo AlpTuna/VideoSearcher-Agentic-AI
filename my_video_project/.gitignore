@@ -1,0 +1,12 @@
+# Environments
+.env
+venv/
+env/
+
+# Python Cache (automatically generated files)
+__pycache__/
+*.pyc
+
+# DeepSpeech Models (Too large for GitHub)
+*.pbmm
+*.scorer
