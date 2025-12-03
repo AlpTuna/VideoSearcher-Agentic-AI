@@ -11,29 +11,29 @@ def execute_command(command):
 def main(args):
     orig_input = args['input']
     orig_output = args['output']
-    
+
     print(f"SCRIPT: Processing {orig_input}")
 
     # 1. Setup Directories
     input_dir = os.path.dirname(orig_input)
     output_dir = os.path.dirname(orig_output)
     
+    # Use a unique folder for extraction to avoid conflicts
     extraction_folder = os.path.join(input_dir, "extract_" + os.path.basename(orig_input))
     os.makedirs(extraction_folder, exist_ok=True)
     
     # 2. Extract Archive
-    print(f"Extracting to {extraction_folder}...")
     command = f"tar -xvzf {orig_input} -C {extraction_folder}"
     execute_command(command)
     
-    # 3. SEARCH for the files
+    # 3. SEARCH for files (Fixes the "Second Run" missing MP4 issue)
     found_wav = None
     found_mp4 = None
     
-    print("Scanning for media files...")
+    print("Scanning extracted files...")
     for root, dirs, files in os.walk(extraction_folder):
         for file in files:
-            if file.startswith("._"): continue
+            if file.startswith("._"): continue # Ignore Mac metadata
             
             if file.endswith(".wav"):
                 found_wav = os.path.join(root, file)
@@ -41,25 +41,28 @@ def main(args):
                 found_mp4 = os.path.join(root, file)
 
     if not found_wav:
-        print("CRITICAL: No .wav file found in the archive!")
+        print("CRITICAL: No .wav file found!")
         sys.exit(1)
-        
-    print(f"Found Audio: {found_wav}")
 
-    # 4. PREPARE AUDIO
-    ready_audio = os.path.join(extraction_folder, "ready_for_deepspeech.wav")
-    
-    # Convert audio (Force 16kHz Mono S16LE)
+    # 4. Prepare Audio (Fixes Silent/Empty Transcript issue)
+    ready_audio = os.path.join(extraction_folder, "ready.wav")
+    print("Converting audio to DeepSpeech format...")
+    # Force 16kHz, Mono, Signed 16-bit
     ffmpeg_cmd = f"ffmpeg -y -i {found_wav} -ar 16000 -ac 1 -c:a pcm_s16le {ready_audio}"
     execute_command(ffmpeg_cmd)
 
-    # 5. Run DeepSpeech
-    #model = "/app/deepspeech-0.9.3-models.pbmm"
-    #scorer = "/app/deepspeech-0.9.3-models.scorer"
-    model = "deepspeech-0.9.3-models.pbmm"
+    # 5. Run DeepSpeech (Fixes "u/3" Error)
+    # MUST point to the /models folder defined in the Dockerfile
+    #model = "deepspeech-0.9.3-models.pbmm"
+    model = "deepspeech-0.9.3-models.tflite"
     scorer = "deepspeech-0.9.3-models.scorer"
     
-    print(f"Running inference on {ready_audio}...")
+    # Sanity check to ensure models were downloaded correctly
+    if not os.path.exists(model):
+        print(f"CRITICAL: Model not found at {model}. Docker build failed to download it.")
+        sys.exit(1)
+
+    print("Running inference...")
     ds_cmd = [
         "deepspeech", 
         "--model", model, 
@@ -67,43 +70,46 @@ def main(args):
         "--audio", ready_audio
     ]
     
+    # Capture errors so they appear in transcript.txt
     result = subprocess.run(ds_cmd, capture_output=True)
     
-    # 6. Process Transcript (THE FIX IS HERE)
     transcript_text = ""
-    
     if result.returncode == 0:
-        # Use errors='replace' just in case stdout has weird characters
-        transcript_text = result.stdout.decode('utf-8', errors='replace')
+        transcript_text = result.stdout.decode('utf-8')
         print("Success! Transcript generated.")
     else:
-        # Use errors='replace' to prevent UnicodeDecodeError on crash logs
+        # If it crashes, write the crash log to the file so you can read it
         error_msg = result.stderr.decode('utf-8', errors='replace')
         print("!!! DeepSpeech Failed !!!")
         print(error_msg)
         transcript_text = f"ERROR LOG:\n{error_msg}"
 
-    # 7. Package Output
+    # 6. Save Transcript
     transcript_filename = "transcript.txt"
     transcript_path = os.path.join(output_dir, transcript_filename)
     with open(transcript_path, "w") as file:
         file.write(transcript_text)
 
-    final_files = [transcript_filename]
+    # 7. Package Output (Fixes missing MP4)
+    files_to_tar = [transcript_filename]
     
     if found_mp4:
-        final_mp4_name = os.path.basename(orig_output) + ".mp4"
-        final_mp4_path = os.path.join(output_dir, final_mp4_name)
-        shutil.copy(found_mp4, final_mp4_path)
-        final_files.append(final_mp4_name)
-    
+        # Rename the found MP4 to match the output name Django expects
+        final_video_name = os.path.basename(orig_output) + ".mp4"
+        final_video_path = os.path.join(output_dir, final_video_name)
+        
+        shutil.copy(found_mp4, final_video_path)
+        files_to_tar.append(final_video_name)
+    else:
+        print("WARNING: No MP4 found in the input archive.")
+
     output_archive = orig_output + ".tar.gz"
     print(f"Creating archive {output_archive}...")
     
     cwd = os.getcwd()
     os.chdir(output_dir)
     try:
-        tar_cmd = ["tar", "-czvf", os.path.basename(output_archive)] + final_files
+        tar_cmd = ["tar", "-czvf", os.path.basename(output_archive)] + files_to_tar
         subprocess.run(tar_cmd, check=True)
     finally:
         os.chdir(cwd)

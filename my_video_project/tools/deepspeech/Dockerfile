@@ -21,13 +21,13 @@ RUN pip install --upgrade pip
 RUN pip install https://github.com/mozilla/DeepSpeech/releases/download/v0.9.3/deepspeech-0.9.3-cp37-cp37m-linux_aarch64.whl
 
 # Downloading the model and scorer
-RUN curl -LO https://github.com/mozilla/DeepSpeech/releases/download/v0.9.3/deepspeech-0.9.3-models.pbmm
+RUN curl -LO https://github.com/mozilla/DeepSpeech/releases/download/v0.9.3/deepspeech-0.9.3-models.tflite
 RUN curl -LO https://github.com/mozilla/DeepSpeech/releases/download/v0.9.3/deepspeech-0.9.3-models.scorer
 
 # Install other requirements (pip install deepspeech causes problems)
 # RUN pip install --no-cache-dir -r requirements.txt
 
 # 4. Copy your script and models
-COPY . .
+COPY main.py .
 
 CMD ["tail", "-f", "/dev/null"]
