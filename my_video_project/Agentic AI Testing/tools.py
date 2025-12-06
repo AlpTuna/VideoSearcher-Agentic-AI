@@ -37,6 +37,19 @@ def call_deepspeech(
     url = f"{DJANGO_BASE}/deepspeech/"
     return _send_post(url, file_path, "deepspeech")
 
+def call_ffmpeg0(
+    file_path: Annotated[str, "The local path to the .mp4 file."]
+) -> str:
+    """
+    Directly calls the /ffmpeg0/ endpoint.
+    Use this to extract audio from video into a package.
+    Input: .mp4
+    Output: .tar.gz (containing video and .wav)
+    """
+    url = f"{DJANGO_BASE}/ffmpeg0/"
+    # We use the same helper function _send_post from the previous step
+    return _send_post(url, file_path, "ffmpeg0")
+
 # --- Helper (Internal) ---
 def _send_post(url, fpath, tool_name):
     if not os.path.exists(fpath):

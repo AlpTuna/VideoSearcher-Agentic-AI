@@ -5,7 +5,7 @@ from agent_framework.azure import AzureOpenAIResponsesClient
 from azure.identity import AzureCliCredential
 from typing import Annotated
 from pydantic import Field
-from tools import call_ffmpeg1, call_ffmpeg2, call_deepspeech
+from tools import call_ffmpeg1, call_ffmpeg2, call_deepspeech, call_ffmpeg0
 
 load_dotenv()
 AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT")
@@ -38,6 +38,16 @@ agent_ffmpeg2 = client.create_agent(
 # 3. Agent: deepspeech
 agent_deepspeech = client.create_agent(
     name="deepspeech",
-    instructions="You are the deepspeech specialist. Your goal is to generate text transcripts from prepared .tar.gz files.",
+    instructions="You are the deepspeech specialist. Your goal is to generate text transcripts from .tar.gz files.",
     tools=[call_deepspeech]
+)
+
+agent_ffmpeg0 = client.create_agent(
+    name="ffmpeg0",
+    instructions="""
+        You are the ffmpeg0 specialist. Your goal is to extract audio from video files.
+        Input: .mp4
+        Output: .tar.gz
+    """,
+    tools=[call_ffmpeg0]
 )
