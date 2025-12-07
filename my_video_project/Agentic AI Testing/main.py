@@ -39,8 +39,22 @@ async def main():
     agent_manager = client.create_agent(
         name="Manager",
         instructions="""
-            You are the System Orchestrator. You manage four subsystems: 'ffmpeg0', 'ffmpeg1', 'ffmpeg2', and 'deepspeech'.
+            You are the System Orchestrator. You manage five subsystems: 'ffmpeg0', 'ffmpeg1', 'ffmpeg2', 'librosa', and 'deepspeech'.
             
+            ---------------------------------------------------------
+            CRITICAL PATH TRANSLATION RULE:
+            The API runs in a Docker container and returns paths starting with '/data/'.
+            However, YOU are running locally and see these files at '/media_data/'.
+
+            WHENEVER you receive an 'output_location' from a tool (e.g., "/data/outputs/video_ffmpeg0"):
+            1. REPLACE '/data/' with './media_data/' at the start of the string.
+            2. IF the path looks like a folder (does not end in .tar.gz), APPEND '/result.tar.gz'.
+
+            EXAMPLE:
+            Input from API: "/data/outputs/video_ffmpeg0"
+            Translated Path you MUST use: "./media_data/outputs/video_ffmpeg0/result.tar.gz"
+            ---------------------------------------------------------
+
             YOUR RULES:
 
             1. IF User wants to extract audio from a video:
@@ -63,6 +77,32 @@ async def main():
             - The input has to be a .tar.gz file which contains a video (.mp4) and its extracted audio (.wav)
             - Call 'delegate_to_librosa'
 
+            ---------------------------------------------------------
+            YOUR RULES FOR COMPLEX PIPELINES (CHAIN OF THOUGHT):
+
+            6. IF User wants to AUTO-SPLIT a raw .mp4 video (based on audio/silence):
+            You must execute this Strict 3-Step Pipeline. 
+            Check the result of each step. If any step fails, STOP and report the error.
+
+            CRITICAL: The output folder of one step contains the input file for the next step.
+
+            * STEP A: Extract Audio
+                - Input: The raw .mp4 file provided by the user.
+                - Action: Call 'delegate_to_ffmpeg0'.
+                - Logic: If response contains "Success", extract the 'output_location' and proceed to Step B.
+                
+            * STEP B: Analyze Audio for Timestamps
+                - Input: The 'output_location' file path from Step A (this is a .tar.gz).
+                - Action: Call 'delegate_to_librosa' with this new path.
+                - Logic: If response contains "Success", extract the 'output_location' and proceed to Step C.
+
+            * STEP C: Split the Video
+                - Input: The 'output_location' file path from Step B (this is a .tar.gz).
+                - Action: Call 'delegate_to_ffmpeg1' with this new path.
+                - Logic: Report the final success message and location to the user.
+                
+            ---------------------------------------------------------
+            GENERAL RULE:
             Always report the final output location to the user.
         """,
         tools=[delegate_to_ffmpeg0, delegate_to_ffmpeg1, delegate_to_ffmpeg2, delegate_to_deepspeech, delegate_to_librosa]
@@ -72,7 +112,7 @@ async def main():
     # Some example commands
     
     # Testing ffmpeg0
-    user_prompt = f"I have a video file at '{base_data_dir}/video.mp4'. Get me the audio of this video"
+    #user_prompt = f"I have a video file at '{base_data_dir}/video.mp4'. Get me the audio of this video"
     
     # Testing ffmpeg2
     #user_prompt = f"I have a video file at '{base_data_dir}/video.mp4'. Please downsize the audio"
@@ -90,6 +130,10 @@ async def main():
     # Testing librosa
     #user_prompt = f"Please get the timestamps of my .tar.gz file at {base_data_dir}/result.tar.gz"
     #user_prompt = f"Please get the timestamps of my .tar.gz file at {base_data_dir}/ffmpeg1_package.tar.gz"
+
+    # Testing complex 1 (auto splitting)
+    user_prompt = f"Please auto-split the video at {base_data_dir}/video.mp4"
+
 
     print(f"\nUser: {user_prompt}")
     

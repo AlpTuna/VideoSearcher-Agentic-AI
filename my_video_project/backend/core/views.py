@@ -188,11 +188,12 @@ class ffmpeg0_view(View):
             exec_result = container.exec_run(cmd)
             
             if exec_result.exit_code == 0:
+                full_file_path = f"{output_prefix}.tar.gz"
                 return JsonResponse({
                     "status": "success",
                     "tool": "ffmpeg-0",
                     "message": "Successfully run ffmpeg0",
-                    "output_location": output_folder_path
+                    "output_location": full_file_path
                 })
             else:
                 return JsonResponse({
