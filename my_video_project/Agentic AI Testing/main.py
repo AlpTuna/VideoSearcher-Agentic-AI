@@ -3,7 +3,7 @@ import asyncio
 from dotenv import load_dotenv
 from agent_framework.azure import AzureOpenAIResponsesClient
 from azure.identity import AzureCliCredential
-from agents import agent_ffmpeg1, agent_ffmpeg2, agent_deepspeech, agent_ffmpeg0 ,client
+from agents import agent_ffmpeg1, agent_ffmpeg2, agent_deepspeech, agent_ffmpeg0, agent_librosa, client
 
 base_data_dir = "./Agentic\ AI\ Testing/test_data"
 
@@ -29,8 +29,13 @@ async def delegate_to_ffmpeg0(task: str) -> str:
     response = await agent_ffmpeg0.run(task)
     return response.text
 
+async def delegate_to_librosa(task: str) -> str:
+    """Send a task to the Librosa agent (Timestamp Generation)."""
+    response = await agent_librosa.run(task)
+    return response.text
+
 async def main():
-    # 4. The Manager Agent
+    # The Manager Agent
     agent_manager = client.create_agent(
         name="Manager",
         instructions="""
@@ -54,9 +59,13 @@ async def main():
             - The input has to be a .tar.gz file which contains a compressed video (.mp4) and a downsampled audio (mono 16 kHz 16 bit .wav).
             - If the input is correct, call 'delegate_to_deepspeech'
 
+            5. IF User wants to get timestamps of a video:
+            - The input has to be a .tar.gz file which contains a video (.mp4) and its extracted audio (.wav)
+            - Call 'delegate_to_librosa'
+
             Always report the final output location to the user.
         """,
-        tools=[delegate_to_ffmpeg0, delegate_to_ffmpeg1, delegate_to_ffmpeg2, delegate_to_deepspeech]
+        tools=[delegate_to_ffmpeg0, delegate_to_ffmpeg1, delegate_to_ffmpeg2, delegate_to_deepspeech, delegate_to_librosa]
     )
     
     
@@ -64,7 +73,6 @@ async def main():
     
     # Testing ffmpeg0
     user_prompt = f"I have a video file at '{base_data_dir}/video.mp4'. Get me the audio of this video"
-    
     
     # Testing ffmpeg2
     #user_prompt = f"I have a video file at '{base_data_dir}/video.mp4'. Please downsize the audio"
@@ -79,6 +87,10 @@ async def main():
     #user_prompt = f"I have a .tar.gz file at '{base_data_dir}/ffmpeg1_package.tar.gz'. Please transcribe the video inside it"
     #user_prompt = f"Please transcribe my video at {base_data_dir}/full_video_deepspeech.tar.gz"
     
+    # Testing librosa
+    #user_prompt = f"Please get the timestamps of my .tar.gz file at {base_data_dir}/result.tar.gz"
+    #user_prompt = f"Please get the timestamps of my .tar.gz file at {base_data_dir}/ffmpeg1_package.tar.gz"
+
     print(f"\nUser: {user_prompt}")
     
     response = await agent_manager.run(user_prompt)

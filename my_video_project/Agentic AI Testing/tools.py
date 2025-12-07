@@ -50,6 +50,18 @@ def call_ffmpeg0(
     # We use the same helper function _send_post from the previous step
     return _send_post(url, file_path, "ffmpeg0")
 
+def call_librosa(
+    file_path: Annotated[str, "The local path to the .tar.gz file containing .mp4 and .wav."]
+) -> str:
+    """
+    Directly calls the /librosa/ endpoint.
+    Use this to generate timestamps from an audio track.
+    Input: .tar.gz (video + wav)
+    Output: .tar.gz (video + timestamps.txt)
+    """
+    url = f"{DJANGO_BASE}/librosa/"
+    return _send_post(url, file_path, "librosa")
+
 # --- Helper (Internal) ---
 def _send_post(url, fpath, tool_name):
     if not os.path.exists(fpath):

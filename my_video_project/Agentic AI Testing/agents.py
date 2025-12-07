@@ -5,7 +5,7 @@ from agent_framework.azure import AzureOpenAIResponsesClient
 from azure.identity import AzureCliCredential
 from typing import Annotated
 from pydantic import Field
-from tools import call_ffmpeg1, call_ffmpeg2, call_deepspeech, call_ffmpeg0
+from tools import call_ffmpeg1, call_ffmpeg2, call_deepspeech, call_ffmpeg0, call_librosa
 
 load_dotenv()
 AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT")
@@ -50,4 +50,16 @@ agent_ffmpeg0 = client.create_agent(
         Output: .tar.gz
     """,
     tools=[call_ffmpeg0]
+)
+
+agent_librosa = client.create_agent(
+    name="librosa",
+    instructions="""
+    You are the Librosa Audio Analyst.
+    Your goal is to analyze audio to generate timestamps (e.g., silence detection, beat tracking).
+    
+    Input Requirement: A .tar.gz file containing an .mp4 video and a .wav audio track.
+    Output: A .tar.gz file containing the video and a 'timestamps.txt' file.
+    """,
+    tools=[call_librosa]
 )

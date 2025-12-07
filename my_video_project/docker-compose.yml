@@ -21,6 +21,7 @@ services:
       - worker_deepspeech
       - worker_ffmpeg2
       - worker_ffmpeg0
+      - worker_librosa
 
   # The Muscle
   ffmpeg-1-tool:
@@ -44,5 +45,11 @@ services:
   worker_ffmpeg0:
     build: ./tools/ffmpeg-0
     container_name: worker_ffmpeg0
+    volumes:
+      - ./media_data:/data
+
+  worker_librosa:
+    build: ./tools/librosa
+    container_name: worker_librosa
     volumes:
       - ./media_data:/data
