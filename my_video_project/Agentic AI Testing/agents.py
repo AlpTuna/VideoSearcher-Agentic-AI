@@ -5,7 +5,7 @@ from agent_framework.azure import AzureOpenAIResponsesClient
 from azure.identity import AzureCliCredential
 from typing import Annotated
 from pydantic import Field
-from tools import call_ffmpeg1, call_ffmpeg2, call_deepspeech, call_ffmpeg0, call_librosa
+from tools import call_ffmpeg1, call_ffmpeg2, call_deepspeech, call_ffmpeg0, call_librosa, call_grep
 
 load_dotenv()
 AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT")
@@ -55,11 +55,27 @@ agent_ffmpeg0 = client.create_agent(
 agent_librosa = client.create_agent(
     name="librosa",
     instructions="""
-    You are the Librosa Audio Analyst.
-    Your goal is to analyze audio to generate timestamps (e.g., silence detection, beat tracking).
-    
-    Input Requirement: A .tar.gz file containing an .mp4 video and a .wav audio track.
-    Output: A .tar.gz file containing the video and a 'timestamps.txt' file.
+        You are the Librosa Audio Analyst.
+        Your goal is to analyze audio to generate timestamps (e.g., silence detection, beat tracking).
+        
+        Input Requirement: A .tar.gz file containing an .mp4 video and a .wav audio track.
+        Output: A .tar.gz file containing the video and a 'timestamps.txt' file.
     """,
     tools=[call_librosa]
+)
+
+agent_grep = client.create_agent(
+    name="grep",
+    instructions="""
+        You are the Content Search Specialist.
+        Your goal is to search for specific words inside a transcript package.
+        
+        You will receive a request like: "Search for the word 'finance' in /path/to/file.tar.gz"
+        
+        You must:
+        1. Extract the file path.
+        2. Extract the keyword.
+        3. Call the 'call_grep' tool with these exact arguments.
+    """,
+    tools=[call_grep]
 )

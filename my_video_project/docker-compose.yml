@@ -22,6 +22,7 @@ services:
       - worker_ffmpeg2
       - worker_ffmpeg0
       - worker_librosa
+      - worker_grep
 
   # The Muscle
   ffmpeg-1-tool:
@@ -51,5 +52,11 @@ services:
   worker_librosa:
     build: ./tools/librosa
     container_name: worker_librosa
+    volumes:
+      - ./media_data:/data
+
+  worker_grep:
+    build: ./tools/grep
+    container_name: worker_grep
     volumes:
       - ./media_data:/data

@@ -250,3 +250,65 @@ class LibrosaView(View):
 
         except Exception as e:
             return JsonResponse({"error": str(e)}, status=500)
+        
+
+@method_decorator(csrf_exempt, name='dispatch')
+class GrepView(View):
+    def post(self, request):
+        if 'file' not in request.FILES:
+            return JsonResponse({"error": "No file provided"}, status=400)
+        
+        # Get the search word from the request body
+        search_word = request.POST.get('word')
+        if not search_word:
+            return JsonResponse({"error": "No search word provided"}, status=400)
+
+        uploaded_file = request.FILES['file']
+        fs = FileSystemStorage(location=settings.MEDIA_ROOT)
+        filename = fs.save(uploaded_file.name, uploaded_file)
+
+        input_path = f"/data/uploads/{filename}"
+        
+        # Unique output folder
+        output_folder_name = f"{os.path.splitext(filename)[0]}_grep"
+        output_folder_path = f"/data/outputs/{output_folder_name}"
+        os.makedirs(output_folder_path, exist_ok=True)
+        
+        output_prefix = f"{output_folder_path}/result"
+
+        try:
+            container = client.containers.get('worker_grep')
+            
+            # Pass the -w argument for the word. We wrap it in quotes.
+            cmd = f"python main.py -i {input_path} -o {output_prefix} -w \"{search_word}\""
+            
+            exec_result = container.exec_run(cmd)
+            
+            full_output_path = f"{output_prefix}.tar.gz"
+            
+            if exec_result.exit_code == 0:
+                # Check logs to confirm if match was found
+                logs = exec_result.output.decode('utf-8')
+                
+                if "MATCH FOUND" in logs:
+                     return JsonResponse({
+                        "status": "success",
+                        "match": True,
+                        "word": search_word,
+                        "output_location": full_output_path
+                    })
+                else:
+                    return JsonResponse({
+                        "status": "success",
+                        "match": False,
+                        "word": search_word,
+                        "message": "Word not found in clip."
+                    })
+            else:
+                return JsonResponse({
+                    "status": "error",
+                    "logs": exec_result.output.decode('utf-8')
+                }, status=500)
+
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=500)

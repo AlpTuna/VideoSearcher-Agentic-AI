@@ -62,6 +62,40 @@ def call_librosa(
     url = f"{DJANGO_BASE}/librosa/"
     return _send_post(url, file_path, "librosa")
 
+def call_grep(
+    file_path: Annotated[str, "The local path to the .tar.gz file (output of Deepspeech)."],
+    keyword: Annotated[str, "The specific word to search for in the transcript."]
+) -> str:
+    """
+    Directly calls the /grep/ endpoint.
+    Search for a word in the transcript.
+    Input: .tar.gz (video + script) AND a keyword string.
+    Output: The video file path (if found).
+    """
+    url = f"{DJANGO_BASE}/grep/"
+    
+    if not os.path.exists(file_path):
+        return f"[grep Error]: Input path '{file_path}' does not exist."
+        
+    try:
+        with open(file_path, 'rb') as f:
+            # We send BOTH the file and the keyword
+            payload = {'word': keyword}
+            files = {'file': f}
+            
+            resp = requests.post(url, files=files, data=payload)
+            
+            try:
+                data = resp.json()
+                if resp.status_code == 200:
+                    return f"[grep Success]: Word found. Video retrieved at: {data.get('output_location')}"
+                else:
+                    return f"[grep Failed]: {data.get('logs', resp.text)}"
+            except:
+                return f"[grep Error]: Server returned non-JSON response."
+    except Exception as e:
+        return f"[grep System Error]: {str(e)}"
+
 # --- Helper (Internal) ---
 def _send_post(url, fpath, tool_name):
     if not os.path.exists(fpath):

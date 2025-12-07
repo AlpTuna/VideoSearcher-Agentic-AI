@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.urls import path
-from core.views import ffmpeg1_view, DeepSpeechView, ffmpeg2_view, ffmpeg0_view, LibrosaView
+from core.views import ffmpeg1_view, DeepSpeechView, ffmpeg2_view, ffmpeg0_view, LibrosaView, GrepView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -9,4 +9,5 @@ urlpatterns = [
     path('ffmpeg2/', ffmpeg2_view.as_view()),
     path('ffmpeg0/', ffmpeg0_view.as_view()),
     path('librosa/', LibrosaView.as_view()),
+    path('grep/', GrepView.as_view()),
 ]
