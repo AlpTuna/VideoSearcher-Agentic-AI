@@ -79,3 +79,20 @@ agent_grep = client.create_agent(
     """,
     tools=[call_grep]
 )
+'''
+agent_batch_search = client.create_agent(
+    name="BatchSearch",
+    instructions="""
+        You are the Batch Processing Specialist.
+        Your goal is to perform search operations on a folder of video clips.
+        
+        You will receive a task like: "Search for 'money' in the folder ./media_data/outputs/..."
+        
+        You must:
+        1. Extract the 'folder_path'.
+        2. Extract the 'keyword'.
+        3. Call the tool 'run_batch_search_pipeline' with these exact arguments.
+    """,
+    tools=[run_batch_search_pipeline]
+)
+'''

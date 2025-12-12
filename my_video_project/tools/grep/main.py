@@ -87,8 +87,7 @@ def main(args):
                 os.remove(os.path.join(output_dir, "video.mp4"))
         
         else:
-            # If not found, we simply do NOT generate the output file.
-            # The API response logic will detect this absence or read the logs.
+            # If not found, we dont generate the output file.
             print("Skipping output generation because word was not found.")
 
     finally:

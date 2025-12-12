@@ -1,7 +1,9 @@
 import requests
 import os
 import json
+import shutil
 from typing import Annotated
+import tarfile
 
 # Configuration
 DJANGO_BASE = "http://localhost:8000"
@@ -95,6 +97,78 @@ def call_grep(
                 return f"[grep Error]: Server returned non-JSON response."
     except Exception as e:
         return f"[grep System Error]: {str(e)}"
+    
+def inspect_archive(
+    file_path: Annotated[str, "The local path to the .tar.gz file."]
+) -> str:
+    """
+    Extracts a .tar.gz file and returns a list of absolute paths for all .mp4 files inside.
+    Use this to see what clips were generated before processing them.
+    """
+    # 1. Path Translation
+    if file_path.startswith("/data/"):
+        file_path = file_path.replace("/data/", "./media_data/")
+        
+    if not os.path.exists(file_path):
+        return f"Error: File {file_path} not found."
+        
+    # 2. Extract
+    extract_dir = file_path + "_extracted"
+    os.makedirs(extract_dir, exist_ok=True)
+    
+    try:
+        with tarfile.open(file_path, "r:gz") as tar:
+            tar.extractall(path=extract_dir)
+            
+        # 3. List Files
+        mp4_files = []
+        for root, dirs, files in os.walk(extract_dir):
+            for file in files:
+                if file.endswith(".mp4"):
+                    # Return absolute paths so other tools can find them easily
+                    full_path = os.path.abspath(os.path.join(root, file))
+                    mp4_files.append(full_path)
+                    
+        if not mp4_files:
+            return "No .mp4 files found in the archive."
+            
+        # Join list into a string for the LLM to read
+        return "Files found:\n" + "\n".join(mp4_files)
+
+    except Exception as e:
+        return f"Error reading archive: {str(e)}"
+
+def save_to_highlights(
+    file_path: Annotated[str, "The local path to the .mp4 file that matched."]
+) -> str:
+    """
+    Copies a specific .mp4 file to the './Agentic AI Testing/final_highlights' folder.
+    Use this when a clip matches the search criteria.
+    """
+    # 1. Path Translation (Docker -> Local)
+    if file_path.startswith("/data/"):
+        file_path = file_path.replace("/data/", "./media_data/")
+    
+    if not os.path.exists(file_path):
+        return f"Error: File {file_path} not found."
+    
+    if not file_path.endswith(".mp4"):
+        return f"Error: Invalid file format. expected a .mp4 file, but got {os.path.basename(file_path)}. You must save the ORIGINAL video clip, not the transcript package."
+
+    # 2. Setup Custom Output Folder
+    # We now point explicitly to your Agentic AI Testing folder
+    highlights_dir = "./Agentic AI Testing/final_highlights"
+    os.makedirs(highlights_dir, exist_ok=True)
+
+    # 3. Copy File
+    filename = os.path.basename(file_path)
+    dest_path = os.path.join(highlights_dir, filename)
+    
+    try:
+        shutil.copy(file_path, dest_path)
+        return f"Success: Clip saved to {dest_path}"
+    except Exception as e:
+        return f"Error saving clip: {str(e)}"
 
 # --- Helper (Internal) ---
 def _send_post(url, fpath, tool_name):

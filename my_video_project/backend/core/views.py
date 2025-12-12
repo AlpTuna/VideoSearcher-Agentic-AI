@@ -52,7 +52,7 @@ class ffmpeg1_view(View):
                 return JsonResponse({
                     "status": "success", 
                     "message": f"Successfuly split {filename}",
-                    "output_location": output_folder
+                    "output_location": f"{output_folder}/clip.tar.gz"
                 })
             else:
                 return JsonResponse({
@@ -99,7 +99,7 @@ class DeepSpeechView(View):
                     "status": "success",
                     "tool": "deepspeech",
                     "message": "Successfully run Deepspeech",
-                    "output_location": output_folder_path
+                    "output_location": f"{output_folder_path}/result.tar.gz"
                 })
             else:
                 return JsonResponse({
@@ -146,7 +146,7 @@ class ffmpeg2_view(View):
                     "status": "success",
                     "tool": "ffmpeg-2",
                     "logs": exec_result.output.decode('utf-8'),
-                    "output_location": output_folder_path
+                    "output_location": f"{output_folder_path}/result.tar.gz"
                 })
             else:
                 return JsonResponse({
@@ -239,7 +239,7 @@ class LibrosaView(View):
                     "status": "success",
                     "tool": "librosa-splitter",
                     "logs": exec_result.output.decode('utf-8'),
-                    "output_location": output_folder_path
+                    "output_location": f"{output_folder_path}/result.tar.gz" # Exact file
                 })
             else:
                 return JsonResponse({
