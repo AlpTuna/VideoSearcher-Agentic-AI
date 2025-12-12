@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 import tarfile
 import re
 import time
+import shutil
 from agent_framework.azure import AzureOpenAIResponsesClient
 from azure.identity import AzureCliCredential
 from agents import agent_ffmpeg1, agent_ffmpeg2, agent_deepspeech, agent_ffmpeg0, agent_librosa, agent_grep, client
@@ -13,6 +14,34 @@ base_data_dir = "./Agentic\ AI\ Testing/test_data"
 
 def log_step(clip_name, step, status, details=""):
     print(f"\n[Batch] {clip_name} | {step}: {status} {details}", end="", flush=True)
+
+def cleanup_path(path: str):
+    """
+    Safely removes a file or directory.
+    If the path is a file inside a subfolder (like 'clip_13_ffmpeg2/result.tar.gz'),
+    it deletes the entire subfolder ('clip_13_ffmpeg2').
+    """
+    if not path: return
+    
+    target_to_delete = path
+    
+    if os.path.exists(path) and os.path.isfile(path):
+        parent_dir = os.path.dirname(path)
+        parent_name = os.path.basename(parent_dir)
+        
+        # Safety Guardrail: Never delete these main system folders
+        SAFE_FOLDERS = ["outputs", "media_data", "test_data", "data", ".", ""]
+        
+        if parent_name not in SAFE_FOLDERS:
+            target_to_delete = parent_dir
+
+    try:
+        if os.path.isfile(target_to_delete):
+            os.remove(target_to_delete)
+        elif os.path.isdir(target_to_delete):
+            shutil.rmtree(target_to_delete)
+    except Exception as e:
+        print(f" [Cleanup Failed: {e}]", end="")
 
 def extract_path_from_text(text: str) -> str:
     """
@@ -164,6 +193,9 @@ async def delegate_to_batch_processor(folder_path: str, keyword: str) -> str:
             continue
 
         trans_local = trans_docker.replace("/data/", "./media_data/")
+
+        # Removing the output of ffmpeg2
+        cleanup_path(prep_local)
         
         # --- AGGRESSIVE TRANSCRIPT READING ---
         transcript_snippet = "N/A"
@@ -177,6 +209,7 @@ async def delegate_to_batch_processor(folder_path: str, keyword: str) -> str:
                     target_tar = os.path.join(target_tar, "result.tar.gz")
 
             if os.path.exists(target_tar):
+                found_tar_path = target_tar
                 with tarfile.open(target_tar, "r:gz") as tar:
                     # DEBUG: List contents to see what the file is actually named
                     # files_in_tar = tar.getnames() 
@@ -223,6 +256,16 @@ async def delegate_to_batch_processor(folder_path: str, keyword: str) -> str:
             print(" No Match.")
 
         results_table += f"| {filename} | {saved_status} | {transcript_snippet} |\n"
+
+        if found_tar_path:
+             # If found_tar_path is inside trans_local folder, delete the whole folder
+             # Otherwise just delete the file
+             if trans_local != found_tar_path and os.path.isdir(trans_local):
+                 cleanup_path(trans_local)
+             else:
+                 cleanup_path(found_tar_path)
+        elif trans_local and os.path.exists(trans_local):
+            cleanup_path(trans_local)
 
     print("\n[Batch Processor] Loop Complete.")
     return f"Batch Processing Complete.\n\n{results_table}"
@@ -335,9 +378,9 @@ async def main():
                         - TRANSLATION: Replace '/data/' with '/media_data/'. Do NOT append a filename, as we need the folder.
 
                 * PHASE 2: BATCH PROCESS
-                 A. Call 'delegate_to_batch_processor'.
-                    - Arguments: Provide the FOLDER PATH from Phase 1 and the KEYWORD.
-                    - This tool will handle the looping and searching for you.
+                    A. Call 'delegate_to_batch_processor'.
+                        - Arguments: Provide the FOLDER PATH from Phase 1 and the KEYWORD.
+                        - This tool will handle the looping and searching for you.
 
                 * PHASE 3: REPORT
                  - The Batch Processor will return a summary table.
