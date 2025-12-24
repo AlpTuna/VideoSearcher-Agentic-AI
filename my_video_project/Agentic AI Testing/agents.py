@@ -1,24 +1,19 @@
 import os
-import asyncio
 from dotenv import load_dotenv
 from agent_framework.azure import AzureOpenAIResponsesClient
-from azure.identity import AzureCliCredential
-from typing import Annotated
-from pydantic import Field
 from tools import call_ffmpeg1, call_ffmpeg2, call_deepspeech, call_ffmpeg0, call_librosa, call_grep
 
 load_dotenv()
 AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT")
 AZURE_OPENAI_API_KEY = os.getenv("AZURE_OPENAI_API_KEY")
 AZURE_OPENAI_DEPLOYMENT = os.getenv("AZURE_OPENAI_DEPLOYMENT")
+AZURE_OPENAI_VERSION = os.getenv("AZURE_OPENAI_VERSION")
 
 client = AzureOpenAIResponsesClient(
     endpoint=AZURE_OPENAI_ENDPOINT,
     api_key=AZURE_OPENAI_API_KEY,
     deployment_name=AZURE_OPENAI_DEPLOYMENT,
-    # api_version=os,environ["AZURE_OPENAI_API_VERSION" ],
-    # api_key=os. environ ["AZURE_OPENAI_API_KEY"], # Optional if using AzureCliCredential
-    #credential=AzureCliCredential(), # Optional, if using api_key
+    #api_version=AZURE_OPENAI_VERSION,
 )
 
 # 1. Agent: ffmpeg1
@@ -79,20 +74,3 @@ agent_grep = client.create_agent(
     """,
     tools=[call_grep]
 )
-'''
-agent_batch_search = client.create_agent(
-    name="BatchSearch",
-    instructions="""
-        You are the Batch Processing Specialist.
-        Your goal is to perform search operations on a folder of video clips.
-        
-        You will receive a task like: "Search for 'money' in the folder ./media_data/outputs/..."
-        
-        You must:
-        1. Extract the 'folder_path'.
-        2. Extract the 'keyword'.
-        3. Call the tool 'run_batch_search_pipeline' with these exact arguments.
-    """,
-    tools=[run_batch_search_pipeline]
-)
-'''

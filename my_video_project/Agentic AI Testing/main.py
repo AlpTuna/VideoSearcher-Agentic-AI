@@ -1,16 +1,13 @@
 import os
 import asyncio
-from dotenv import load_dotenv
 import tarfile
 import re
 import time
 import shutil
-from agent_framework.azure import AzureOpenAIResponsesClient
-from azure.identity import AzureCliCredential
 from agents import agent_ffmpeg1, agent_ffmpeg2, agent_deepspeech, agent_ffmpeg0, agent_librosa, agent_grep, client
-from tools import inspect_archive, save_to_highlights
+from tools import save_to_highlights
 
-base_data_dir = "./Agentic\ AI\ Testing/test_data"
+base_data_dir = "./Agentic\\ AI\\ Testing/test_data"
 
 def log_step(clip_name, step, status, details=""):
     print(f"\n[Batch] {clip_name} | {step}: {status} {details}", end="", flush=True)
@@ -392,11 +389,12 @@ async def main():
         """,
         tools=[delegate_to_ffmpeg0, delegate_to_ffmpeg1, delegate_to_ffmpeg2,
                delegate_to_deepspeech, delegate_to_librosa, delegate_to_grep,
-               inspect_archive, save_to_highlights, delegate_to_batch_processor]
+               save_to_highlights, delegate_to_batch_processor]
     )
     
-    
+    # ----------------------
     # Some example commands
+    # ----------------------
     
     # Testing ffmpeg0
     #user_prompt = f"I have a video file at '{base_data_dir}/video.mp4'. Get me the audio of this video"

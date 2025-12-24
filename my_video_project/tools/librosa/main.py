@@ -69,7 +69,6 @@ def main(args):
     # We explicitly return sr to pass it to get_duration
     audio, sr = librosa.load(audio_path, sr=22050, mono=True)
     
-    # --- THE FIX IS HERE ---
     # In Librosa 0.10.0+, 'y' and 'sr' must be keyword arguments
     duration = librosa.get_duration(y=audio, sr=sr)
     # -----------------------
