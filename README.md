@@ -6,7 +6,7 @@ This project uses an agentic AI architecture to extract audio, split video, tran
 
 ### 1. Prerequisites
 * **Docker Desktop** (must be installed and running)
-* **Python 3.14+**
+* **Python 3.10+**
 
 ### 2. Create a Virtual Environment
 Isolate dependencies to prevent system conflicts.
@@ -39,7 +39,7 @@ AZURE_OPENAI_DEPLOYMENT_NAME=your_deployment_name
 ## 🐳 Docker Setup
 Crucial Step: Before running the Python script, you must ensure the tool containers are active.
 
-Navigate to the main folder, and start each individual component using the following command
+Navigate to the root directory and start each individual component using the following command
 ```bash
 docker-compose up --build
 ```
@@ -49,3 +49,8 @@ Once the containers are running and the environemnt is active, run the main orch
 ```bash
 python main.py
 ```
+
+## 📂 Results
+The resulting clips will be automatically saved in the `Agentic AI Testing/final_highlights` folder.
+
+You can monitor tool execution steps, and the responses of the LLM on the terminal.
