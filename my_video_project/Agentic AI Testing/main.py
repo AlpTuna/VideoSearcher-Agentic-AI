@@ -6,6 +6,10 @@ import time
 import shutil
 from agents import agent_ffmpeg1, agent_ffmpeg2, agent_deepspeech, agent_ffmpeg0, agent_librosa, agent_grep, client
 from tools import save_to_highlights
+from dotenv import load_dotenv
+from codecarbon import EmissionsTracker
+
+tracker = EmissionsTracker(project_name=os.getenv('AZURE_OPENAI_DEPLOYMENT'), output_dir="./emissions_data")
 
 base_data_dir = "./Agentic\\ AI\\ Testing/test_data"
 
@@ -57,14 +61,22 @@ def extract_path_from_text(text: str) -> str:
 # The Manager doesn't run the logic itself; it asks the sub-agents to do it.
 async def delegate_to_ffmpeg1(task: str) -> str:
     """Send a task to the ffmpeg1 agent (Splitting)."""
-    response = await agent_ffmpeg1.run(task)
-    return response.text
+    tracker.start_task("Tool: FFmpeg1 (Split)")
+    try:
+        response = await agent_ffmpeg1.run(task)
+        return response.text
+    finally:
+        tracker.stop_task()
 
 async def delegate_to_ffmpeg2(task: str) -> str:
     """Send a task to the ffmpeg2 agent (Audio Prep/Conversion)."""
     print(f"\n[System] Running ffmpeg2 on: {task}", end="", flush=True)
-    response = await agent_ffmpeg2.run(task)
-    return response.text
+    tracker.start_task("Tool: FFmpeg2 (Prep)")
+    try:
+        response = await agent_ffmpeg2.run(task)
+        return response.text
+    finally:
+        tracker.stop_task()
 
 async def delegate_to_deepspeech(task: str) -> str:
     """
@@ -72,202 +84,224 @@ async def delegate_to_deepspeech(task: str) -> str:
     Contains inline logic to read the file so we don't need external helpers.
     """
     print(f"\n[System] Transcribing...", end="", flush=True)
+    tracker.start_task("Tool: DeepSpeech (Transcribe)")
 
-    # 1. Run the agent (Standard)
-    response = await agent_deepspeech.run(task)
-    output_text = response.text
-    
-    # 2. Inline Logic: Try to read the transcript file locally
-    if "Success" in output_text:
-        try:
-            # Attempt to find the docker path in the response
-            # Response format expected: "... saved at: /data/outputs/..."
-            if "at: " in output_text:
-                docker_path = output_text.split("at: ")[1].strip().split()[0]
-                
-                # Manual Path Translation (Inline)
-                local_path = docker_path.replace("/data/", "./media_data/")
-                
-                # Verify and Read
-                if os.path.exists(local_path) and local_path.endswith(".tar.gz"):
-                    with tarfile.open(local_path, "r:gz") as tar:
-                        # Find the first .txt file
-                        txt_file = next((m for m in tar.getmembers() if m.name.endswith(".txt")), None)
-                        if txt_file:
-                            f = tar.extractfile(txt_file)
-                            content = f.read().decode('utf-8')
-                            
-                            # Append the ACTUAL TEXT to the output
-                            output_text += f"\n\n[TRANSCRIPT EXTRACTED]:\n{content}\n"
-        except Exception as e:
-            output_text += f"\n(Note: Could not auto-read transcript text: {str(e)})"
+    try:
+        # 1. Run the agent (Standard)
+        response = await agent_deepspeech.run(task)
+        output_text = response.text
+        
+        # 2. Inline Logic: Try to read the transcript file locally
+        if "Success" in output_text:
+            try:
+                # Attempt to find the docker path in the response
+                # Response format expected: "... saved at: /data/outputs/..."
+                if "at: " in output_text:
+                    docker_path = output_text.split("at: ")[1].strip().split()[0]
+                    
+                    # Manual Path Translation (Inline)
+                    local_path = docker_path.replace("/data/", "./media_data/")
+                    
+                    # Verify and Read
+                    if os.path.exists(local_path) and local_path.endswith(".tar.gz"):
+                        with tarfile.open(local_path, "r:gz") as tar:
+                            # Find the first .txt file
+                            txt_file = next((m for m in tar.getmembers() if m.name.endswith(".txt")), None)
+                            if txt_file:
+                                f = tar.extractfile(txt_file)
+                                content = f.read().decode('utf-8')
+                                
+                                # Append the ACTUAL TEXT to the output
+                                output_text += f"\n\n[TRANSCRIPT EXTRACTED]:\n{content}\n"
+            except Exception as e:
+                output_text += f"\n(Note: Could not auto-read transcript text: {str(e)})"
 
-    return output_text
+        return output_text
+    finally:
+        tracker.stop_task()
 
 async def delegate_to_ffmpeg0(task: str) -> str:
     """Send a task to the ffmpeg0 agent (General Audio Extraction)."""
     print(f"\n[System] Running Extract Audio...", end="", flush=True)
-    response = await agent_ffmpeg0.run(task)
-    return response.text
+    tracker.start_task("Tool: FFmpeg0 (Extract)")
+    try:
+        response = await agent_ffmpeg0.run(task)
+        return response.text
+    finally:
+        tracker.stop_task()
 
 async def delegate_to_librosa(task: str) -> str:
     """Send a task to the Librosa agent (Timestamp Generation)."""
     print(f"\n[System] Running Timestamp Analysis...", end="", flush=True)
-    response = await agent_librosa.run(task)
-    return response.text
+    tracker.start_task("Tool: Librosa (Timestamps)")
+    try:
+        response = await agent_librosa.run(task)
+        return response.text
+    finally:
+        tracker.stop_task()
 
 async def delegate_to_grep(task: str) -> str:
     """Send a task to the grep agent (Content Search)."""
     print(f"\n[System] Running Grep Search...", end="", flush=True)
-    response = await agent_grep.run(task)
-    return response.text
+    tracker.start_task("Tool: Grep (Search)")
+    try:
+        response = await agent_grep.run(task)
+        return response.text
+    finally:
+        tracker.stop_task()
 
 # --- 2. THE BATCH PROCESSOR (The Agent-Driven Loop) ---
 async def delegate_to_batch_processor(folder_path: str, keyword: str) -> str:
     print(f"\n\n[Batch Processor] Starting loop on: {folder_path}")
+    tracker.start_task("Tool: Batch Processor Loop")
     
-    # 1. Path Translation
-    if folder_path.startswith("/data/"):
-        folder_path = folder_path.replace("/data/", "./media_data/")
-    
-    if not os.path.exists(folder_path):
-        return f"Error: Folder {folder_path} not found."
-
-    # 2. Find Clips
-    clips = []
-    for root, dirs, files in os.walk(folder_path):
-        for f in files:
-            if f.endswith(".mp4"):
-                clips.append(os.path.join(root, f))
-    
-    if not clips:
-        return "Error: No clips found."
-
-    print(f"[Batch Processor] Found {len(clips)} clips. Starting sequential processing...")
-    
-    results_table = "| Clip Name | Saved? | Transcript Excerpt |\n|---|---|---|\n"
-    
-    for i, clip_path in enumerate(clips):
-        filename = os.path.basename(clip_path)
-        print(f"\n--- [{i+1}/{len(clips)}] {filename} ---")
+    try:
+        # 1. Path Translation
+        if folder_path.startswith("/data/"):
+            folder_path = folder_path.replace("/data/", "./media_data/")
         
-        # ---------------------------------------------------------
-        # STEP A: PREP (FFMPEG2)
-        # ---------------------------------------------------------
-        print(f"    > Prep...", end="", flush=True)
-        # We call the TOOL directly (call_ffmpeg2) or the AGENT?
-        # Let's use the AGENT to maintain the pattern, but parse carefully.
-        resp_prep = await agent_ffmpeg2.run(f"Prepare audio for: {clip_path}")
-        prep_text = resp_prep.text
+        if not os.path.exists(folder_path):
+            return f"Error: Folder {folder_path} not found."
+
+        # 2. Find Clips
+        clips = []
+        for root, dirs, files in os.walk(folder_path):
+            for f in files:
+                if f.endswith(".mp4"):
+                    clips.append(os.path.join(root, f))
         
-        prep_docker = extract_path_from_text(prep_text)
-        if not prep_docker:
-            print(f" FAILED. Agent output: {prep_text[:50]}...")
-            results_table += f"| {filename} | ERROR (Prep) | N/A |\n"
-            continue
+        if not clips:
+            return "Error: No clips found."
+
+        print(f"[Batch Processor] Found {len(clips)} clips. Starting sequential processing...")
+        
+        results_table = "| Clip Name | Saved? | Transcript Excerpt |\n|---|---|---|\n"
+        
+        for i, clip_path in enumerate(clips):
+            filename = os.path.basename(clip_path)
+            print(f"\n--- [{i+1}/{len(clips)}] {filename} ---")
             
-        print(f" Done.")
-        prep_local = prep_docker.replace("/data/", "./media_data/")
+            # ---------------------------------------------------------
+            # STEP A: PREP (FFMPEG2)
+            # ---------------------------------------------------------
+            print(f"    > Prep...", end="", flush=True)
+            # We call the TOOL directly (call_ffmpeg2) or the AGENT?
+            # Let's use the AGENT to maintain the pattern, but parse carefully.
+            resp_prep = await agent_ffmpeg2.run(f"Prepare audio for: {clip_path}")
+            prep_text = resp_prep.text
+            
+            prep_docker = extract_path_from_text(prep_text)
+            if not prep_docker:
+                print(f" FAILED. Agent output: {prep_text[:50]}...")
+                results_table += f"| {filename} | ERROR (Prep) | N/A |\n"
+                continue
+                
+            print(f" Done.")
+            prep_local = prep_docker.replace("/data/", "./media_data/")
 
-        # ---------------------------------------------------------
-        # STEP B: TRANSCRIBE (DEEPSPEECH)
-        # ---------------------------------------------------------
-        print(f"    > Transcribe...", end="", flush=True)
-        
-        # Ensure file extension
-        if os.path.isdir(prep_local):
-            if os.path.exists(os.path.join(prep_local, "result.tar.gz")):
-                prep_local = os.path.join(prep_local, "result.tar.gz")
+            # ---------------------------------------------------------
+            # STEP B: TRANSCRIBE (DEEPSPEECH)
+            # ---------------------------------------------------------
+            print(f"    > Transcribe...", end="", flush=True)
+            
+            # Ensure file extension
+            if os.path.isdir(prep_local):
+                if os.path.exists(os.path.join(prep_local, "result.tar.gz")):
+                    prep_local = os.path.join(prep_local, "result.tar.gz")
 
-        resp_trans = await agent_deepspeech.run(f"Transcribe: {prep_local}")
-        trans_text = resp_trans.text
-        #print('trans_text:', trans_text)
+            resp_trans = await agent_deepspeech.run(f"Transcribe: {prep_local}")
+            trans_text = resp_trans.text
+            #print('trans_text:', trans_text)
 
-        trans_docker = extract_path_from_text(trans_text)
-        if not trans_docker:
-            print(f" FAILED. Agent output: {trans_text[:50]}...")
-            results_table += f"| {filename} | ERROR (Transcribe) | N/A |\n"
-            continue
+            trans_docker = extract_path_from_text(trans_text)
+            if not trans_docker:
+                print(f" FAILED. Agent output: {trans_text[:50]}...")
+                results_table += f"| {filename} | ERROR (Transcribe) | N/A |\n"
+                continue
 
-        trans_local = trans_docker.replace("/data/", "./media_data/")
+            trans_local = trans_docker.replace("/data/", "./media_data/")
 
-        # Removing the output of ffmpeg2
-        cleanup_path(prep_local)
-        
-        # --- AGGRESSIVE TRANSCRIPT READING ---
-        transcript_snippet = "N/A"
-        try:
-            target_tar = trans_local
-            print(f'target_tar: ({target_tar})')
-            time.sleep(0.5)
-            # Handle directory output
-            if os.path.isdir(target_tar):
-                 if os.path.exists(os.path.join(target_tar, "result.tar.gz")):
-                    target_tar = os.path.join(target_tar, "result.tar.gz")
+            # Removing the output of ffmpeg2
+            cleanup_path(prep_local)
+            
+            # --- AGGRESSIVE TRANSCRIPT READING ---
+            transcript_snippet = "N/A"
+            try:
+                target_tar = trans_local
+                print(f'target_tar: ({target_tar})')
+                time.sleep(0.5)
+                # Handle directory output
+                if os.path.isdir(target_tar):
+                    if os.path.exists(os.path.join(target_tar, "result.tar.gz")):
+                        target_tar = os.path.join(target_tar, "result.tar.gz")
 
-            if os.path.exists(target_tar):
-                found_tar_path = target_tar
-                with tarfile.open(target_tar, "r:gz") as tar:
-                    # DEBUG: List contents to see what the file is actually named
-                    # files_in_tar = tar.getnames() 
-                    # print(f" [Files: {files_in_tar}]", end="") 
+                if os.path.exists(target_tar):
+                    found_tar_path = target_tar
+                    with tarfile.open(target_tar, "r:gz") as tar:
+                        # DEBUG: List contents to see what the file is actually named
+                        # files_in_tar = tar.getnames() 
+                        # print(f" [Files: {files_in_tar}]", end="") 
 
-                    # 1. Try finding .txt
-                    txt_file = next((m for m in tar.getmembers() if m.name.endswith(".txt")), None)
-                    
-                    # 2. Fallback: If no .txt, take the first file that isn't a folder
-                    if not txt_file:
-                        txt_file = next((m for m in tar.getmembers() if m.isfile()), None)
+                        # 1. Try finding .txt
+                        txt_file = next((m for m in tar.getmembers() if m.name.endswith(".txt")), None)
+                        
+                        # 2. Fallback: If no .txt, take the first file that isn't a folder
+                        if not txt_file:
+                            txt_file = next((m for m in tar.getmembers() if m.isfile()), None)
 
-                    if txt_file:
-                        content = tar.extractfile(txt_file).read().decode('utf-8', errors='ignore')
-                        full_transcript = content
-                        clean = content.replace('\n', ' ').strip()
-                        transcript_snippet = (clean[:50] + '...') if len(clean) > 50 else clean
-                        print(f" Done. Content: \"{transcript_snippet}\"")
-                    else:
-                         print(f" Done (Empty Archive).")
+                        if txt_file:
+                            content = tar.extractfile(txt_file).read().decode('utf-8', errors='ignore')
+                            full_transcript = content
+                            clean = content.replace('\n', ' ').strip()
+                            transcript_snippet = (clean[:50] + '...') if len(clean) > 50 else clean
+                            print(f" Done. Content: \"{transcript_snippet}\"")
+                        else:
+                            print(f" Done (Empty Archive).")
+                else:
+                    print(f" Failed (File not found: {target_tar})") # this is called
+
+            except Exception as e:
+                print(f" Error Reading: {e}")
+
+            # ---------------------------------------------------------
+            # STEP C: SEARCH (PYTHON - DIRECT)
+            # ---------------------------------------------------------
+            # We skip the Grep Agent entirely because we already have the text!
+            print(f"    > Searching for '{keyword}'...", end="", flush=True)
+            
+            saved_status = "NO"
+            if keyword.lower() in full_transcript.lower():
+                print(" MATCH! Saving...", end="")
+                save_msg = save_to_highlights(clip_path)
+                if "Success" in save_msg:
+                    print(" Saved.")
+                    saved_status = "YES"
+                else:
+                    print(f" Save Failed: {save_msg}")
+                    saved_status = "ERROR (Save)"
             else:
-                print(f" Failed (File not found: {target_tar})") # this is called
+                print(" No Match.")
 
-        except Exception as e:
-            print(f" Error Reading: {e}")
+            results_table += f"| {filename} | {saved_status} | {transcript_snippet} |\n"
 
-        # ---------------------------------------------------------
-        # STEP C: SEARCH (PYTHON - DIRECT)
-        # ---------------------------------------------------------
-        # We skip the Grep Agent entirely because we already have the text!
-        print(f"    > Searching for '{keyword}'...", end="", flush=True)
-        
-        saved_status = "NO"
-        if keyword.lower() in full_transcript.lower():
-            print(" MATCH! Saving...", end="")
-            save_msg = save_to_highlights(clip_path)
-            if "Success" in save_msg:
-                print(" Saved.")
-                saved_status = "YES"
-            else:
-                print(f" Save Failed: {save_msg}")
-                saved_status = "ERROR (Save)"
-        else:
-            print(" No Match.")
+            if found_tar_path:
+                # If found_tar_path is inside trans_local folder, delete the whole folder
+                # Otherwise just delete the file
+                if trans_local != found_tar_path and os.path.isdir(trans_local):
+                    cleanup_path(trans_local)
+                else:
+                    cleanup_path(found_tar_path)
+            elif trans_local and os.path.exists(trans_local):
+                cleanup_path(trans_local)
 
-        results_table += f"| {filename} | {saved_status} | {transcript_snippet} |\n"
-
-        if found_tar_path:
-             # If found_tar_path is inside trans_local folder, delete the whole folder
-             # Otherwise just delete the file
-             if trans_local != found_tar_path and os.path.isdir(trans_local):
-                 cleanup_path(trans_local)
-             else:
-                 cleanup_path(found_tar_path)
-        elif trans_local and os.path.exists(trans_local):
-            cleanup_path(trans_local)
-
-    print("\n[Batch Processor] Loop Complete.")
-    return f"Batch Processing Complete.\n\n{results_table}"
+        print("\n[Batch Processor] Loop Complete.")
+        return f"Batch Processing Complete.\n\n{results_table}"
+    finally:
+        tracker.stop_task()
     
 async def main():
+    tracker.start()
+    
     # The Manager Agent
     agent_manager = client.create_agent(
         name="Manager",
@@ -427,9 +461,12 @@ async def main():
 
     print(f"\nUser: {user_prompt}")
     
+    tracker.start_task("LLM Thinking")
     response = await agent_manager.run(user_prompt)
+    tracker.stop_task()
     
     print(f"\nManager: {response.text}")
+    tracker.stop()
 
 if __name__ == "__main__":
     asyncio.run(main())

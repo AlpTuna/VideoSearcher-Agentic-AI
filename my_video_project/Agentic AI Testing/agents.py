@@ -9,6 +9,9 @@ AZURE_OPENAI_API_KEY = os.getenv("AZURE_OPENAI_API_KEY")
 AZURE_OPENAI_DEPLOYMENT = os.getenv("AZURE_OPENAI_DEPLOYMENT")
 AZURE_OPENAI_VERSION = os.getenv("AZURE_OPENAI_VERSION")
 
+print(f"Endpoint:   {AZURE_OPENAI_ENDPOINT}")
+print(f"Deployment: {AZURE_OPENAI_DEPLOYMENT}")
+
 client = AzureOpenAIResponsesClient(
     endpoint=AZURE_OPENAI_ENDPOINT,
     api_key=AZURE_OPENAI_API_KEY,
