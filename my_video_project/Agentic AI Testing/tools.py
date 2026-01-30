@@ -89,7 +89,9 @@ def call_grep(
             
             try:
                 data = resp.json()
-                if resp.status_code == 200:
+                is_match = data.get('match', False)
+
+                if resp.status_code == 200 and is_match:
                     return f"[grep Success]: Word found. Video retrieved at: {data.get('output_location')}"
                 else:
                     return f"[grep Failed]: {data.get('logs', resp.text)}"

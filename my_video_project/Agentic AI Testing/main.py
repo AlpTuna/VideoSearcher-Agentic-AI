@@ -6,43 +6,33 @@ import time
 import shutil
 from agents import agent_ffmpeg1, agent_ffmpeg2, agent_deepspeech, agent_ffmpeg0, agent_librosa, agent_grep, client
 from tools import save_to_highlights
-from dotenv import load_dotenv
 from codecarbon import EmissionsTracker
 
-tracker = EmissionsTracker(project_name=os.getenv('AZURE_OPENAI_DEPLOYMENT'), output_dir="./emissions_data")
+tracker = EmissionsTracker(project_name=os.getenv('AZURE_OPENAI_DEPLOYMENT'), output_dir="./Agentic AI Testing/emissions_data")
 
 base_data_dir = "./Agentic\\ AI\\ Testing/test_data"
 
-def log_step(clip_name, step, status, details=""):
-    print(f"\n[Batch] {clip_name} | {step}: {status} {details}", end="", flush=True)
-
-def cleanup_path(path: str):
+def reset_directories(dir_paths):
     """
-    Safely removes a file or directory.
-    If the path is a file inside a subfolder (like 'clip_13_ffmpeg2/result.tar.gz'),
-    it deletes the entire subfolder ('clip_13_ffmpeg2').
+    Deletes all contents within the specified directories but keeps the parent folders.
+    Used to delete upload/output of the tasks so that they dont cram up
     """
-    if not path: return
     
-    target_to_delete = path
-    
-    if os.path.exists(path) and os.path.isfile(path):
-        parent_dir = os.path.dirname(path)
-        parent_name = os.path.basename(parent_dir)
-        
-        # Safety Guardrail: Never delete these main system folders
-        SAFE_FOLDERS = ["outputs", "media_data", "test_data", "data", ".", ""]
-        
-        if parent_name not in SAFE_FOLDERS:
-            target_to_delete = parent_dir
+    for dir_path in dir_paths:
+        if not os.path.exists(dir_path):
+            os.makedirs(dir_path) # Create if it doesn't exist
+            continue
 
-    try:
-        if os.path.isfile(target_to_delete):
-            os.remove(target_to_delete)
-        elif os.path.isdir(target_to_delete):
-            shutil.rmtree(target_to_delete)
-    except Exception as e:
-        print(f" [Cleanup Failed: {e}]", end="")
+        # Iterate over all files and folders inside the directory
+        for filename in os.listdir(dir_path):
+            file_path = os.path.join(dir_path, filename)
+            try:
+                if os.path.isfile(file_path) or os.path.islink(file_path):
+                    os.unlink(file_path) # Delete file or symlink
+                elif os.path.isdir(file_path):
+                    shutil.rmtree(file_path) # Delete subdirectory
+            except Exception as e:
+                print(f"⚠️ Failed to delete {file_path}. Reason: {e}")
 
 def extract_path_from_text(text: str) -> str:
     """
@@ -53,7 +43,7 @@ def extract_path_from_text(text: str) -> str:
     match = re.search(r'(/data/[\w\-\./]+\.tar\.gz|/data/[\w\-\./]+)', text)
     if match:
         path = match.group(0).strip()
-        # FIX: Strip backticks, asterisks, commas, periods, quotes from the end
+        # Strip backticks, asterisks, commas, periods, quotes from the end
         return path.rstrip(".,;:`*'\"")
     return None
 
@@ -202,7 +192,7 @@ async def delegate_to_batch_processor(folder_path: str, keyword: str) -> str:
             # ---------------------------------------------------------
             # STEP B: TRANSCRIBE (DEEPSPEECH)
             # ---------------------------------------------------------
-            print(f"    > Transcribe...", end="", flush=True)
+            print(f"    > Transcribe...")
             
             # Ensure file extension
             if os.path.isdir(prep_local):
@@ -211,7 +201,6 @@ async def delegate_to_batch_processor(folder_path: str, keyword: str) -> str:
 
             resp_trans = await agent_deepspeech.run(f"Transcribe: {prep_local}")
             trans_text = resp_trans.text
-            #print('trans_text:', trans_text)
 
             trans_docker = extract_path_from_text(trans_text)
             if not trans_docker:
@@ -220,57 +209,21 @@ async def delegate_to_batch_processor(folder_path: str, keyword: str) -> str:
                 continue
 
             trans_local = trans_docker.replace("/data/", "./media_data/")
-
-            # Removing the output of ffmpeg2
-            cleanup_path(prep_local)
             
-            # --- AGGRESSIVE TRANSCRIPT READING ---
-            transcript_snippet = "N/A"
-            try:
-                target_tar = trans_local
-                print(f'target_tar: ({target_tar})')
-                time.sleep(0.5)
-                # Handle directory output
-                if os.path.isdir(target_tar):
-                    if os.path.exists(os.path.join(target_tar, "result.tar.gz")):
-                        target_tar = os.path.join(target_tar, "result.tar.gz")
-
-                if os.path.exists(target_tar):
-                    found_tar_path = target_tar
-                    with tarfile.open(target_tar, "r:gz") as tar:
-                        # DEBUG: List contents to see what the file is actually named
-                        # files_in_tar = tar.getnames() 
-                        # print(f" [Files: {files_in_tar}]", end="") 
-
-                        # 1. Try finding .txt
-                        txt_file = next((m for m in tar.getmembers() if m.name.endswith(".txt")), None)
-                        
-                        # 2. Fallback: If no .txt, take the first file that isn't a folder
-                        if not txt_file:
-                            txt_file = next((m for m in tar.getmembers() if m.isfile()), None)
-
-                        if txt_file:
-                            content = tar.extractfile(txt_file).read().decode('utf-8', errors='ignore')
-                            full_transcript = content
-                            clean = content.replace('\n', ' ').strip()
-                            transcript_snippet = (clean[:50] + '...') if len(clean) > 50 else clean
-                            print(f" Done. Content: \"{transcript_snippet}\"")
-                        else:
-                            print(f" Done (Empty Archive).")
-                else:
-                    print(f" Failed (File not found: {target_tar})") # this is called
-
-            except Exception as e:
-                print(f" Error Reading: {e}")
-
             # ---------------------------------------------------------
-            # STEP C: SEARCH (PYTHON - DIRECT)
+            # STEP C: SEARCH (AGENT GREP)
             # ---------------------------------------------------------
-            # We skip the Grep Agent entirely because we already have the text!
-            print(f"    > Searching for '{keyword}'...", end="", flush=True)
+            print(f"    > Searching for '{keyword}'", end="", flush=True)
             
+            grep_prompt = f"Search for the word '{keyword}' in {trans_local}"
+            resp_grep = await agent_grep.run(grep_prompt)
+            grep_output = resp_grep.text.lower().strip()
+            
+            # Determine success based on Agent response
+            # (Grep agent returns "Match found" or "No")
             saved_status = "NO"
-            if keyword.lower() in full_transcript.lower():
+            
+            if "found" in grep_output or "match" in grep_output: # Could also be "match found"
                 print(" MATCH! Saving...", end="")
                 save_msg = save_to_highlights(clip_path)
                 if "Success" in save_msg:
@@ -282,17 +235,9 @@ async def delegate_to_batch_processor(folder_path: str, keyword: str) -> str:
             else:
                 print(" No Match.")
 
-            results_table += f"| {filename} | {saved_status} | {transcript_snippet} |\n"
-
-            if found_tar_path:
-                # If found_tar_path is inside trans_local folder, delete the whole folder
-                # Otherwise just delete the file
-                if trans_local != found_tar_path and os.path.isdir(trans_local):
-                    cleanup_path(trans_local)
-                else:
-                    cleanup_path(found_tar_path)
-            elif trans_local and os.path.exists(trans_local):
-                cleanup_path(trans_local)
+            # Truncate output for table
+            clean_grep_output = (grep_output[:50] + '...') if len(grep_output) > 50 else grep_output
+            results_table += f"| {filename} | {saved_status} | {clean_grep_output} |\n"
 
         print("\n[Batch Processor] Loop Complete.")
         return f"Batch Processing Complete.\n\n{results_table}"
@@ -302,161 +247,53 @@ async def delegate_to_batch_processor(folder_path: str, keyword: str) -> str:
 async def main():
     tracker.start()
     
-    # The Manager Agent
+    # The "True Agent" Prompt: Capability-based, not Procedure-based
     agent_manager = client.create_agent(
-        name="Manager",
+        name = "Manager",
         instructions="""
-            You are the System Orchestrator. You manage six subsystems: 'ffmpeg0', 'ffmpeg1', 'ffmpeg2', 'librosa', 'deepspeech', and 'grep'.
+            You are an autonomous Media Processing Orchestrator.
+            Your goal is to satisfy user requests by chaining together the correct tools.
+
+            ### CRITICAL INFRASTRUCTURE RULE (Non-Negotiable)
+            The tools run in Docker and return paths starting with `/data/`.
+            You run locally and see these files at `./media_data/`.
+            **Action:** Whenever a tool gives you a path, IMMEDIATELY translate it:
+            'replace("/data/", "./media_data/")' before using it in the next tool.
+
+            ### YOUR TOOLBOX (Capabilities)
+            1. **delegate_to_ffmpeg0**: Extracts raw audio (.wav) from a video file.
+               - *Use when:* You need high-quality audio or need to prepare for timestamp analysis.
             
-            ---------------------------------------------------------
-            CRITICAL PATH TRANSLATION RULE:
-            The API runs in a Docker container and returns paths starting with '/data/'.
-            However, YOU are running locally and see these files at './media_data/'.
+            2. **delegate_to_librosa**: Generates silence/activity timestamps from an audio file.
+               - *Use when:* You need to know *where* to split a video. 
+               - *Input:* Requires the output from ffmpeg0.
 
-            WHENEVER you receive an 'output_location' from a tool:
-            1. REPLACE '/data/' with './media_data/' at the start of the string.
-            ---------------------------------------------------------
+            3. **delegate_to_ffmpeg1**: Splits a video into clips based on timestamps.
+               - *Use when:* The user wants to "split" or "segment" a video.
+               - *Input:* Requires a package containing Video + Timestamps (usually from Librosa).
 
-            YOUR RULES:
+            4. **delegate_to_ffmpeg2**: Downsamples audio for transcription (16kHz mono).
+               - *Use when:* You need to prepare audio for text transcription.
+               - *Input:* A video file.
 
-            1. IF User wants to EXTRACT AUDIO from a video:
-                - The input has to be a .mp4 file
-                - Call 'delegate_to_ffmpeg0'
-            
-            2. IF User wants to SPLIT a video given a .tar.gz file:
-                - The input has to be a .tar.gz file that contains a compressed video file (.mp4) and a text file with timestamps (.txt)
-                - Call 'delegate_to_ffmpeg1'.
+            5. **delegate_to_deepspeech**: Transcribes speech to text.
+               - *Use when:* The user wants to know what is said in the video.
+               - *Input:* Requires prepared audio (from ffmpeg2).
 
-            3. IF User wants to DOWNSIZE the audio and convert to .tar.gz given a video (.mp4) file:
-                - The input has to be a .mp4 file
-                - Call 'delegate_to_ffmpeg2'.
-            
-            4. IF User wants to TRANSCRIBE a video:
-                - The input has to be a .tar.gz file which contains a compressed video (.mp4) and a downsampled audio (mono 16 kHz 16 bit .wav).
-                - If the input is correct, call 'delegate_to_deepspeech'
+            6. **delegate_to_batch_processor**: Scans a folder of clips and finds specific keywords.
+               - *Use when:* The user wants to find "clips containing [word]".
+               - *Strategy:* This requires a folder of clips first. (Hint: Split the video first).
 
-            5. IF User wants to GET TIMESTAMPS of a video:
-                - The input has to be a .tar.gz file which contains a video (.mp4) and its extracted audio (.wav)
-                - Call 'delegate_to_librosa'
-
-            6. IF User wants to SEARCH for a word inside a video:
-                - Input: A .tar.gz file (from Deepspeech) AND a keyword.
-                - Action: Construct a sentence like "Search for '[keyword]' in [TRANSLATED_PATH]"
-                - Call 'delegate_to_grep' with that sentence.
-
-            ---------------------------------------------------------
-            YOUR RULES FOR COMPLEX PIPELINES (CHAIN OF THOUGHT):
-
-            7. IF User wants to AUTO-SPLIT a raw .mp4 video (based on audio/silence):
-                You must execute this Strict 3-Step Pipeline. 
-                Check the result of each step. If any step fails, STOP and report the error.
-
-                CRITICAL: The output of one step is the input file for the next step.
-
-                * STEP A: Extract Audio
-                    - Input: The raw .mp4 file provided by the user.
-                    - Action: Call 'delegate_to_ffmpeg0'.
-                    - Logic: If response contains "Success", extract the 'output_location' and proceed to Step B.
-                    - CRITICAL: Apply Path Translation Rule (/data/ -> ./media_data/).
-                    
-                * STEP B: Analyze Audio for Timestamps
-                    - Input: The 'output_location' file path from Step A (this is a .tar.gz).
-                    - Action: Call 'delegate_to_librosa' with this new path.
-                    - Logic: If response contains "Success", extract the 'output_location' and proceed to Step C.
-                    - CRITICAL: Apply Path Translation Rule.
-
-                * STEP C: Split the Video
-                    - Input: The 'output_location' file path from Step B (this is a .tar.gz).
-                    - Action: Call 'delegate_to_ffmpeg1' with this new path.
-                    - Logic: Report the final success message and location to the user.
-            
-            8. IF User wants to SEARCH for a word inside a RAW .mp4 video:
-                You must execute this Strict 3-Step Pipeline.
-                Check the result of each step. If any step fails, STOP and report the error.
-
-                CRITICAL: The output folder of one step contains the input file for the next step.
-
-                * STEP A: Prepare Audio (ffmpeg2)
-                    - Input: The raw .mp4 file provided by the user.
-                    - Action: Call 'delegate_to_ffmpeg2'.
-                    - Logic: If response contains "Success", extract the 'output_location'.
-                    - TRANSLATION: Apply Path Translation Rule to this location and proceed to Step B.
-
-                * STEP B: Transcribe (deepspeech)
-                    - Input: The TRANSLATED file path from Step A.
-                    - Action: Call 'delegate_to_deepspeech' with this new path.
-                    - Logic: If response contains "Success", extract the 'output_location'.
-                    - TRANSLATION: Apply Path Translation Rule to this location and proceed to Step C.
-
-                * STEP C: Search (grep)
-                    - Input: The TRANSLATED file path from Step B AND the keyword provided by the user.
-                    - Action: Call 'delegate_to_grep' with the sentence: "Search for '[keyword]' in [TRANSLATED_PATH]".
-                    - Logic: Report if the word was found or not.
-
-
-            9. SMART HIGHLIGHT PIPELINE (Split Video -> Search Each Clip):
-                If the user wants to "Find all clips containing [word]" or "Extract highlights from [video]":
-                
-                You must execute this 2-Phase Process.
-                
-                * PHASE 1: EXECUTE AUTO-SPLIT (Reuse Pipeline 7 logic manually)
-                    A. Call 'delegate_to_ffmpeg0' (Extract Audio).
-                        - Apply Translation Rule.
-                    B. Call 'delegate_to_librosa' (Get Timestamps).
-                        - Apply Translation Rule.
-                    C. Call 'delegate_to_ffmpeg1' (Split Video).
-                        - Logic: Extract the 'output_location' (this is a FOLDER of clips).
-                        - TRANSLATION: Replace '/data/' with '/media_data/'. Do NOT append a filename, as we need the folder.
-
-                * PHASE 2: BATCH PROCESS
-                    A. Call 'delegate_to_batch_processor'.
-                        - Arguments: Provide the FOLDER PATH from Phase 1 and the KEYWORD.
-                        - This tool will handle the looping and searching for you.
-
-                * PHASE 3: REPORT
-                 - The Batch Processor will return a summary table.
-                 - Simply print that table to the user.
-                
-            ---------------------------------------------------------
-            GENERAL RULE:
-            Always report the final output location to the user.
+            ### REASONING GUIDELINES
+            * **Dependency Management:** If a tool needs a specific input (e.g., Timestamps), look for another tool that generates that output (e.g., Librosa) and run that first.
+            * **Chain of Thought:** Before calling tools, plan your steps. Example: "To split the video, I first need timestamps. To get timestamps, I first need audio."
         """,
         tools=[delegate_to_ffmpeg0, delegate_to_ffmpeg1, delegate_to_ffmpeg2,
                delegate_to_deepspeech, delegate_to_librosa, delegate_to_grep,
-               save_to_highlights, delegate_to_batch_processor]
+               delegate_to_batch_processor]
     )
     
-    # ----------------------
-    # Some example commands
-    # ----------------------
-    
-    # Testing ffmpeg0
-    #user_prompt = f"I have a video file at '{base_data_dir}/video.mp4'. Get me the audio of this video"
-    
-    # Testing ffmpeg2
-    #user_prompt = f"I have a video file at '{base_data_dir}/video.mp4'. Please downsize the audio"
-    #user_prompt = f"I have a video file at '{base_data_dir}/ffmpeg1_package.tar.gz'. Please downsize the audio"
-
-    # Testing ffmpeg1
-    #user_prompt = f"I have a .tar.gz file at '{base_data_dir}/ffmpeg1_package.tar.gz'. Please split it into smaller videos based on the timestamps included in the file"
-    #user_prompt = f"I have a .tar.gz file at '{base_data_dir}/full_video_deepspeech.tar.gz'. Please split it into smaller videos based on the timestamps included in the file"
-    
-    # Testing deepspeech
-    #user_prompt = f"I have a .tar.gz file at '{base_data_dir}/full_video_deepspeech.tar.gz'. Please transcribe the video inside it"
-    #user_prompt = f"I have a .tar.gz file at '{base_data_dir}/ffmpeg1_package.tar.gz'. Please transcribe the video inside it"
-    #user_prompt = f"Please transcribe my video at {base_data_dir}/full_video_deepspeech.tar.gz"
-    
-    # Testing librosa
-    #user_prompt = f"Please get the timestamps of my .tar.gz file at {base_data_dir}/result.tar.gz"
-    #user_prompt = f"Please get the timestamps of my .tar.gz file at {base_data_dir}/ffmpeg1_package.tar.gz"
-
-    # Testing complex 1 (auto splitting)
-    #user_prompt = f"Please auto-split the video at {base_data_dir}/video.mp4"
-
-    # Testing complex 2 (word searching)
-    #user_prompt = f"Please search for the word 'caffeine' in {base_data_dir}/video.mp4"
-    
-    # Testing full pipeline
+    # Testing full pipeline (Implicit Reasoning Test)
     user_prompt = f"Please find all the clips containing the word 'caffeine' in {base_data_dir}/video.mp4"
 
     print(f"\nUser: {user_prompt}")
@@ -467,6 +304,9 @@ async def main():
     
     print(f"\nManager: {response.text}")
     tracker.stop()
+
+    # Cleanup
+    reset_directories(["media_data/uploads", "media_data/outputs"])
 
 if __name__ == "__main__":
     asyncio.run(main())

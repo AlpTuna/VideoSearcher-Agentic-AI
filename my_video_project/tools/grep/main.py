@@ -14,8 +14,6 @@ def main(args):
     orig_output = args['output']
     search_word = args['word']
 
-    print(f"SCRIPT: Searching for '{search_word}' in {orig_input}")
-
     input_dir = os.path.dirname(orig_input)
     output_dir = os.path.dirname(orig_output)
     output_name = os.path.basename(orig_output)
@@ -52,9 +50,9 @@ def main(args):
         found = False
         if search_word.lower() in content.lower():
             found = True
-            print(f"MATCH FOUND: The word '{search_word}' is in the transcript.")
+            print(f"MATCH FOUND: The word '{search_word}' is in {content}")
         else:
-            print(f"NO MATCH: The word '{search_word}' is NOT in the transcript.")
+            print(f"NO: The word is NOT in the transcript.")
 
         # 4. Handle Output
         if found:

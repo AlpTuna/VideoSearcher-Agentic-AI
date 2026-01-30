@@ -40,6 +40,7 @@ agent_deepspeech = client.create_agent(
     tools=[call_deepspeech]
 )
 
+# 4. Agent: ffmpeg0
 agent_ffmpeg0 = client.create_agent(
     name="ffmpeg0",
     instructions="""
@@ -50,6 +51,7 @@ agent_ffmpeg0 = client.create_agent(
     tools=[call_ffmpeg0]
 )
 
+# 5. Agent: Librosa
 agent_librosa = client.create_agent(
     name="librosa",
     instructions="""
@@ -62,6 +64,7 @@ agent_librosa = client.create_agent(
     tools=[call_librosa]
 )
 
+# 6. Agent: Grep
 agent_grep = client.create_agent(
     name="grep",
     instructions="""
@@ -74,6 +77,8 @@ agent_grep = client.create_agent(
         1. Extract the file path.
         2. Extract the keyword.
         3. Call the 'call_grep' tool with these exact arguments.
+
+        If match is found say only 'Match found', otherwise say only 'No'
     """,
     tools=[call_grep]
 )

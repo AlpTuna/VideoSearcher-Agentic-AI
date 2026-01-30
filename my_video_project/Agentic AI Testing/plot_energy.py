@@ -5,37 +5,36 @@ import matplotlib.cm as cm
 import numpy as np
 
 # --- Configuration ---
-MAIN_FILE = "emissions.csv"
 EMISSIONS_FOLDER = "./Agentic AI Testing/emissions_data"
+MAIN_FILE = "emissions.csv"
 
-# --- 1. Load & Process Main Emissions Data ---
-if not os.path.exists(MAIN_FILE):
-    print(f"Error: '{MAIN_FILE}' not found.")
+FILE_PATH = os.path.join(EMISSIONS_FOLDER, MAIN_FILE)
+
+PLOT_COUNTRY = False # Country was used in my analysis, but its not always required
+
+# 1. Load & Process Main Emissions Data
+if not os.path.exists(FILE_PATH):
+    print(f"Error: '{FILE_PATH}' not found.")
     exit()
 
-df = pd.read_csv(MAIN_FILE)
+df = pd.read_csv(FILE_PATH)
 
-# Process Model Name
+# Process Model Name (project name is equal to the model name used in .env)
 if 'project_name' not in df.columns:
     print("Error: 'project_name' column missing.")
     exit()
 df['Model'] = df['project_name']
 
-# --- LOCATION CORRECTION ---
+# Location Preprocessing
 if 'country_name' in df.columns:
     df['Location'] = df['country_name'].fillna('Unknown')
-    df['Location'] = df['Location'].replace({
-        'Türkiye': 'Turkey', 
-        'Turkiye': 'Turkey',
-        'Canada': 'Italy'  # Merge Canada into Italy (for some reason, one run was considered Canada)
-    })
 else:
     df['Location'] = 'Unknown'
 
 # Clean data
 df_main = df.dropna(subset=['Model']).copy()
 
-# --- 2. Aggregations (Energy, Power, Emissions) ---
+# 2. Aggregations (Energy, Power, Emissions)
 energy_cols = ['cpu_energy', 'gpu_energy', 'ram_energy']
 power_cols = ['cpu_power', 'gpu_power', 'ram_power']
 metrics = energy_cols + power_cols + ['emissions']
@@ -43,14 +42,14 @@ metrics = energy_cols + power_cols + ['emissions']
 for m in metrics:
     if m not in df_main.columns: df_main[m] = 0
 
-# Group by MODEL (Window 1)
+# Group by Model (Window 1)
 avg_data_model = df_main.groupby('Model')[metrics].mean()
 
-# Group by LOCATION (Window 2)
+# Group by Location (Window 2)
 avg_data_location = df_main.groupby('Location')[metrics].mean()
 
 
-# --- 3. Process Granular Data (Tasks) ---
+# 3. Process Granular Data (Tasks)
 print(f"Processing granular files from '{EMISSIONS_FOLDER}'...")
 task_data = []
 
@@ -67,6 +66,11 @@ NORMALIZATION_MAP = {
 }
 
 def normalize_task_name(raw_name):
+    """
+    Standardizes task names by matching substrings against a predefined map.
+    e.g. "Tool: Librosa (Timestamps)_3d948c43-1ed7-42a5-8004-f71efb9abc16 -> Tool: Librosa".
+    This is essential for grouping dynamic task names together in plots.
+    """
     raw_lower = str(raw_name).lower()
     for key, standard_name in NORMALIZATION_MAP.items():
         if key.lower() in raw_lower:
@@ -167,6 +171,7 @@ def plot_dashboard(window_title, avg_data_df, avg_time_df, fig_num):
 
 # --- 5. Generate Windows ---
 plot_dashboard("Model", avg_data_model, df_time_model, 1)
-plot_dashboard("Location", avg_data_location, df_time_location, 2)
+if PLOT_COUNTRY:
+    plot_dashboard("Location", avg_data_location, df_time_location, 2)
 
 plt.show()
