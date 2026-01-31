@@ -14,3 +14,11 @@ __pycache__/
 # Mac DS_Store files
 .DS_Store
 **/.DS_Store
+
+# Ignore contents of output folders (but keep the folder via .gitkeep)
+my_video_project/media_data/outputs/*
+my_video_project/!media_data/outputs/.gitkeep
+my_video_project/media_data/uploads/*
+my_video_project/!media_data/uploads/.gitkeep
+my_video_project/Agentic AI Testing/final_highlights/*
+my_video_project/!Agentic AI Testing/final_highlights/.gitkeep
