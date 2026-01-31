@@ -11,6 +11,7 @@ from codecarbon import EmissionsTracker
 tracker = EmissionsTracker(project_name=os.getenv('AZURE_OPENAI_DEPLOYMENT'), output_dir="./Agentic AI Testing/emissions_data")
 
 base_data_dir = "./Agentic\\ AI\\ Testing/test_data"
+prompts_dir = "Agentic AI Testing/prompts_archive"
 
 def reset_directories(dir_paths):
     """
@@ -245,49 +246,22 @@ async def delegate_to_batch_processor(folder_path: str, keyword: str) -> str:
         tracker.stop_task()
     
 async def main():
+
+    # This is the .txt file that contains the instructions for the main agent
+    manager_instructions_txtFile = f"{prompts_dir}/manager_instruction_v2.txt"
+
+    try:
+        with open(manager_instructions_txtFile, "r", encoding="utf-8") as f:
+            manager_instructions = f.read()
+    except FileNotFoundError:
+        print(f"Error: '{manager_instructions_txtFile}' not found. Please ensure it exists.")
+        exit(1)
+
     tracker.start()
     
-    # The "True Agent" Prompt: Capability-based, not Procedure-based
     agent_manager = client.create_agent(
         name = "Manager",
-        instructions="""
-            You are an autonomous Media Processing Orchestrator.
-            Your goal is to satisfy user requests by chaining together the correct tools.
-
-            ### CRITICAL INFRASTRUCTURE RULE (Non-Negotiable)
-            The tools run in Docker and return paths starting with `/data/`.
-            You run locally and see these files at `./media_data/`.
-            **Action:** Whenever a tool gives you a path, IMMEDIATELY translate it:
-            'replace("/data/", "./media_data/")' before using it in the next tool.
-
-            ### YOUR TOOLBOX (Capabilities)
-            1. **delegate_to_ffmpeg0**: Extracts raw audio (.wav) from a video file.
-               - *Use when:* You need high-quality audio or need to prepare for timestamp analysis.
-            
-            2. **delegate_to_librosa**: Generates silence/activity timestamps from an audio file.
-               - *Use when:* You need to know *where* to split a video. 
-               - *Input:* Requires the output from ffmpeg0.
-
-            3. **delegate_to_ffmpeg1**: Splits a video into clips based on timestamps.
-               - *Use when:* The user wants to "split" or "segment" a video.
-               - *Input:* Requires a package containing Video + Timestamps (usually from Librosa).
-
-            4. **delegate_to_ffmpeg2**: Downsamples audio for transcription (16kHz mono).
-               - *Use when:* You need to prepare audio for text transcription.
-               - *Input:* A video file.
-
-            5. **delegate_to_deepspeech**: Transcribes speech to text.
-               - *Use when:* The user wants to know what is said in the video.
-               - *Input:* Requires prepared audio (from ffmpeg2).
-
-            6. **delegate_to_batch_processor**: Scans a folder of clips and finds specific keywords.
-               - *Use when:* The user wants to find "clips containing [word]".
-               - *Strategy:* This requires a folder of clips first. (Hint: Split the video first).
-
-            ### REASONING GUIDELINES
-            * **Dependency Management:** If a tool needs a specific input (e.g., Timestamps), look for another tool that generates that output (e.g., Librosa) and run that first.
-            * **Chain of Thought:** Before calling tools, plan your steps. Example: "To split the video, I first need timestamps. To get timestamps, I first need audio."
-        """,
+        instructions=manager_instructions,
         tools=[delegate_to_ffmpeg0, delegate_to_ffmpeg1, delegate_to_ffmpeg2,
                delegate_to_deepspeech, delegate_to_librosa, delegate_to_grep,
                delegate_to_batch_processor]
