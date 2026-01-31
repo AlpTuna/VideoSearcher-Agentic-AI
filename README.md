@@ -56,8 +56,19 @@ AZURE_OPENAI_API_KEY=your_key_here
 AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com/
 AZURE_OPENAI_DEPLOYMENT=your_deployment_name
 ```
+### 6. Agent Instructions & Prompts
+The Manager Agent's logic is loaded from an external text file stored in `Agentic AI Testing/prompts_archive/` for easier editing.
 
-### 6. Docker Setup
+**To try a new prompt experiment:**
+1. Create a new text file in `Agentic AI Testing/prompts_archive/` (e.g., `manager_instruction_v3.txt`).
+2. Open `main.py` and modify the `manager_instructions_txtFile` variable to point to your new file:
+
+```python
+# Example change in main.py
+manager_instructions_txtFile = f"{prompts_dir}/manager_instruction_v3.txt"
+```
+
+### 7. Docker Setup
 Crucial Step: The "Tools" (FFmpeg and DeepSpeech) and the Django backend run inside Docker containers. The Python script (main.py) acts as the conductor, sending commands to these containers.
 
 1. Start Docker Desktop on your machine.
