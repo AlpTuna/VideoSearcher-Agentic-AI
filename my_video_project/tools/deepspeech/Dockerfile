@@ -16,9 +16,14 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --upgrade pip
 
-# 3. Install DeepSpeech 0.9.3 from the official Mozilla GitHub Release
-# This is the specific wheel that works on M1/M2/M3/M4 chips (aarch64)
-RUN pip install https://github.com/mozilla/DeepSpeech/releases/download/v0.9.3/deepspeech-0.9.3-cp37-cp37m-linux_aarch64.whl
+# 3. Install Deepspeech (Works on both Mac M1/M2/M3/M4 and Windows/Linux x86)
+RUN if [ "$(uname -m)" = "aarch64" ]; then \
+      echo "ARM64 (Mac) detected - Installing specific wheel..." && \
+      pip install https://github.com/mozilla/DeepSpeech/releases/download/v0.9.3/deepspeech-0.9.3-cp37-cp37m-linux_aarch64.whl; \
+    else \
+      echo "AMD64 (Windows/Server) detected - Installing from PyPI..." && \
+      pip install deepspeech==0.9.3; \
+    fi
 
 # Downloading the model and scorer
 RUN curl -LO https://github.com/mozilla/DeepSpeech/releases/download/v0.9.3/deepspeech-0.9.3-models.tflite
