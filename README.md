@@ -57,7 +57,7 @@ AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com/
 AZURE_OPENAI_DEPLOYMENT=your_deployment_name
 ```
 ### 6. Agent Instructions & Prompts
-The Manager Agent's logic is loaded from an external text file stored in `Agentic AI Testing/prompts_archive/` for easier editing.
+The Manager Agent's logic is loaded from an external text file stored in `Agentic AI Testing/prompts_archive/` for easier editing and comparison.
 
 **To try a new prompt experiment:**
 1. Create a new text file in `Agentic AI Testing/prompts_archive/` (e.g., `manager_instruction_v3.txt`).
